@@ -1,0 +1,58 @@
+#Gaussian NB Model for Multi Class Classification 
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import GaussianNB
+from sklearn.feature_selection import chi2
+from sklearn.metrics import accuracy_score
+from sklearn.feature_extraction.text import TfidfVectorizer,CountVectorizer
+from sklearn.metrics import confusion_matrix
+from io import StringIO
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+#--specify your file with text and categories:
+df = pd.read_csv(r'C:\Users\MyName\MyDrive\directory\Training_dataset.csv').astype(str)
+df.head()
+
+col = ['Topic', 'verbatim']
+df = df[col]
+df = df[pd.notnull(df['verbatim'])]
+
+df.columns = ['Topic', 'verbatim']
+df['Topic_id2'] = df['Topic'].factorize()[0]
+Topic_id_df = df[['Topic', 'Topic_id2']].drop_duplicates().sort_values('Topic_id2')
+Topic_to_id = dict(Topic_id_df.values)
+id_to_topic = dict(Topic_id_df[['Topic_id2', 'Topic']].values)
+df.head()
+
+tfidf = TfidfVectorizer(sublinear_tf=True, min_df=5, encoding='latin-1', 
+        ngram_range=(1, 2), stop_words='english')
+
+features = tfidf.fit_transform(df.verbatim).toarray()
+labels = df.Topic_id2
+features.shape
+
+#find terms most correlated with the products:
+N = 3
+for Topic, Topic_id2 in sorted(Topic_to_id.items()):
+    features_chi2 = chi2(features, labels == Topic_id2)
+    indices = np.argsort(features_chi2[0])
+    feature_names = np.array(tfidf.get_feature_names()) [indices]
+    unigrams = [v for v in feature_names if len(v.split(' ')) == 1]
+    bigrams = [v for v in feature_names if len(v.split(' ')) == 2]
+
+
+model = GaussianNB()
+
+X_train, X_test, y_train, y_test, indices_train, indices_test = train_test_split(features, labels, df.index, test_size=0.33, random_state=0)
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+
+conf_mat = confusion_matrix(y_test, y_pred)
+fig, ax = plt.subplots(figsize=(10,10))
+sns.heatmap(conf_mat, annot=True, fmt='d',
+            xticklabels=Topic_id_df.Topic.values, yticklabels=Topic_id_df.Topic.values)
+plt.ylabel('Actual')
+plt.xlabel('Predicted')
+plt.show()
